@@ -202,6 +202,8 @@ PopulateLevel2PageTable (
   PageEntry = ((UINT32 *)(TranslationTable) + ((PhysicalBase & TT_DESCRIPTOR_PAGE_INDEX_MASK) >> TT_DESCRIPTOR_PAGE_BASE_SHIFT));
   Pages     = RemainLength / TT_DESCRIPTOR_PAGE_SIZE;
 
+  ASSERT (Pages <= TRANSLATION_TABLE_PAGE_COUNT);
+
   for (Index = 0; Index < Pages; Index++) {
     *PageEntry++     =  TT_DESCRIPTOR_PAGE_BASE_ADDRESS(PhysicalBase) | PageAttributes;
     PhysicalBase += TT_DESCRIPTOR_PAGE_SIZE;
@@ -273,6 +275,7 @@ FillTranslationTable (
         // Case: Physical address aligned on the Section Size (1MB) && the length is greater than the Section Size
         *SectionEntry++ = TT_DESCRIPTOR_SECTION_BASE_ADDRESS(PhysicalBase) | Attributes;
         PhysicalBase += TT_DESCRIPTOR_SECTION_SIZE;
+        RemainLength -= TT_DESCRIPTOR_SECTION_SIZE;
       } else {
         // Case: Physical address aligned on the Section Size (1MB) && the length does not fill a section
         PopulateLevel2PageTable (SectionEntry++, PhysicalBase, RemainLength, MemoryRegion->Attributes);
@@ -281,17 +284,20 @@ FillTranslationTable (
         break;
       }
     } else {
+      UINT32 PageMapStart = PhysicalBase % TT_DESCRIPTOR_SECTION_SIZE;
+      UINT32 PageMapLength = MIN(RemainLength, TT_DESCRIPTOR_SECTION_SIZE) - PageMapStart;
+
       // Case: Physical address NOT aligned on the Section Size (1MB)
-      PopulateLevel2PageTable (SectionEntry++, PhysicalBase, RemainLength, MemoryRegion->Attributes);
-      // Aligned the address
-      PhysicalBase = (PhysicalBase + TT_DESCRIPTOR_SECTION_SIZE) & ~(TT_DESCRIPTOR_SECTION_SIZE-1);
+      PopulateLevel2PageTable (SectionEntry++, PhysicalBase, PageMapLength, MemoryRegion->Attributes);
 
       // If it is the last entry
       if (RemainLength < TT_DESCRIPTOR_SECTION_SIZE) {
         break;
       }
+
+      PhysicalBase += PageMapLength;
+      RemainLength -= PageMapLength;
     }
-    RemainLength -= TT_DESCRIPTOR_SECTION_SIZE;
   }
 }
 
